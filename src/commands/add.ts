@@ -3,12 +3,37 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import YAML from 'yaml';
-import { Character, Event, LearnRecord, Location } from '../models/types';
+import { slugify as transliterateSlugify } from 'transliteration';
+import { Character, Concept, Event, Item, LearnRecord, Location } from '../models/types';
 import { findProjectRoot } from '../db/sync';
 
 function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slug = transliterateSlugify(text, { lowercase: true, separator: '-' });
+  if (slug.length > 0) return slug;
+  return 'id-' + crypto.createHash('md5').update(text).digest('hex').substring(0, 8);
+}
+
+function resolveCharacterFile(charsDir: string, participant: string): string | null {
+  const directFile = path.join(charsDir, `${participant}.yaml`);
+  if (fs.existsSync(directFile)) return directFile;
+
+  const slugged = slugify(participant);
+  const slugFile = path.join(charsDir, `${slugged}.yaml`);
+  if (fs.existsSync(slugFile)) return slugFile;
+
+  if (!fs.existsSync(charsDir)) return null;
+  const yamlFiles = fs.readdirSync(charsDir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml'));
+  for (const file of yamlFiles) {
+    const filePath = path.join(charsDir, file);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = YAML.parse(content) as Character;
+    if (data.name === participant) return filePath;
+    if (data.aliases && data.aliases.includes(participant)) return filePath;
+  }
+
+  return null;
 }
 
 interface CharacterOptions {
@@ -137,10 +162,10 @@ async function addEvent(options: EventOptions): Promise<void> {
 
   if (answers.visibility === 'participants' && participants.length > 0) {
     const charsDir = path.join(projectRoot, 'characters');
-    for (const charId of participants) {
-      const charFile = path.join(charsDir, `${charId}.yaml`);
-      if (fs.existsSync(charFile)) {
-        const charContent = fs.readFileSync(charFile, 'utf-8');
+    for (const participant of participants) {
+      const resolved = resolveCharacterFile(charsDir, participant);
+      if (resolved) {
+        const charContent = fs.readFileSync(resolved, 'utf-8');
         const charData = YAML.parse(charContent) as Character;
         if (!charData.learns) {
           charData.learns = [];
@@ -151,10 +176,10 @@ async function addEvent(options: EventOptions): Promise<void> {
           method: 'witnessed',
         };
         charData.learns.push(learnEntry);
-        fs.writeFileSync(charFile, YAML.stringify(charData), 'utf-8');
-        console.log(chalk.cyan(`  Added learn entry to ${charId}`));
+        fs.writeFileSync(resolved, YAML.stringify(charData), 'utf-8');
+        console.log(chalk.cyan(`  Added learn entry to ${charData.id}`));
       } else {
-        console.log(chalk.yellow(`  Warning: character file not found for "${charId}"`));
+        console.log(chalk.yellow(`  Warning: character file not found for "${participant}"`));
       }
     }
   }
@@ -222,6 +247,100 @@ async function addLocation(options: LocationOptions): Promise<void> {
   console.log(chalk.green(`\n✓ Location "${answers.name}" created at ${relativePath}`));
 }
 
+interface ConceptOptions {
+  name?: string;
+  category?: string;
+  description?: string;
+}
+
+async function addConcept(options: ConceptOptions): Promise<void> {
+  const projectRoot = findProjectRoot();
+  const conceptsDir = path.join(projectRoot, 'concepts');
+
+  let answers: { name: string; category: string; description: string };
+
+  if (options.name) {
+    answers = {
+      name: options.name,
+      category: options.category || '',
+      description: options.description || '',
+    };
+  } else {
+    answers = await inquirer.prompt([
+      { type: 'input', name: 'name', message: 'Concept name:', validate: (v: string) => v.trim().length > 0 || 'Name is required' },
+      { type: 'input', name: 'category', message: 'Category:', default: '' },
+      { type: 'input', name: 'description', message: 'Description:', default: '' },
+    ]);
+  }
+
+  const slug = slugify(answers.name);
+
+  const concept: Concept = {
+    id: slug,
+    name: answers.name,
+    category: answers.category,
+    description: answers.description,
+    tags: [],
+    created_at: new Date().toISOString(),
+  };
+
+  if (!fs.existsSync(conceptsDir)) {
+    fs.mkdirSync(conceptsDir, { recursive: true });
+  }
+
+  const filePath = path.join(conceptsDir, `${slug}.yaml`);
+  fs.writeFileSync(filePath, YAML.stringify(concept), 'utf-8');
+
+  console.log(chalk.green(`\n✓ Concept "${answers.name}" created at concepts/${slug}.yaml`));
+}
+
+interface ItemOptions {
+  name?: string;
+  description?: string;
+  owner?: string;
+}
+
+async function addItem(options: ItemOptions): Promise<void> {
+  const projectRoot = findProjectRoot();
+  const itemsDir = path.join(projectRoot, 'items');
+
+  let answers: { name: string; description: string; owner: string };
+
+  if (options.name) {
+    answers = {
+      name: options.name,
+      description: options.description || '',
+      owner: options.owner || '',
+    };
+  } else {
+    answers = await inquirer.prompt([
+      { type: 'input', name: 'name', message: 'Item name:', validate: (v: string) => v.trim().length > 0 || 'Name is required' },
+      { type: 'input', name: 'description', message: 'Description:', default: '' },
+      { type: 'input', name: 'owner', message: 'Owner (character id):', default: '' },
+    ]);
+  }
+
+  const slug = slugify(answers.name);
+
+  const item: Item = {
+    id: slug,
+    name: answers.name,
+    description: answers.description,
+    ...(answers.owner ? { owner: answers.owner } : {}),
+    tags: [],
+    created_at: new Date().toISOString(),
+  };
+
+  if (!fs.existsSync(itemsDir)) {
+    fs.mkdirSync(itemsDir, { recursive: true });
+  }
+
+  const filePath = path.join(itemsDir, `${slug}.yaml`);
+  fs.writeFileSync(filePath, YAML.stringify(item), 'utf-8');
+
+  console.log(chalk.green(`\n✓ Item "${answers.name}" created at items/${slug}.yaml`));
+}
+
 export function registerAddCommand(program: Command): void {
   const add = program
     .command('add')
@@ -283,14 +402,32 @@ export function registerAddCommand(program: Command): void {
   add
     .command('concept')
     .description('Add a new concept')
-    .action(() => {
-      console.log('Add concept - to be implemented');
+    .option('--name <name>', 'Concept name (enables non-interactive mode)')
+    .option('--category <category>', 'Concept category (e.g. 魔法体系)')
+    .option('--description <desc>', 'Concept description')
+    .action(async (opts: ConceptOptions) => {
+      try {
+        await addConcept(opts);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(`Error: ${message}`));
+        process.exit(1);
+      }
     });
 
   add
     .command('item')
     .description('Add a new item')
-    .action(() => {
-      console.log('Add item - to be implemented');
+    .option('--name <name>', 'Item name (enables non-interactive mode)')
+    .option('--description <desc>', 'Item description')
+    .option('--owner <owner>', 'Owner character id')
+    .action(async (opts: ItemOptions) => {
+      try {
+        await addItem(opts);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(`Error: ${message}`));
+        process.exit(1);
+      }
     });
 }
