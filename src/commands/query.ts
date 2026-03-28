@@ -117,10 +117,102 @@ export function registerQueryCommand(program: Command): void {
   query
     .command('timeline')
     .description('View event timeline')
-    .option('--character <name>', 'Filter by character')
-    .option('--from <epoch>', 'Start epoch')
-    .option('--to <epoch>', 'End epoch')
-    .action((options) => {
-      console.log('Query timeline - to be implemented');
+    .option('--character <name>', 'Filter by character id')
+    .option('--from <epoch>', 'Start epoch number')
+    .option('--to <epoch>', 'End epoch number')
+    .action((options: { character?: string; from?: string; to?: string }) => {
+      try {
+        const projectRoot = findProjectRoot();
+        const dbPath = path.join(projectRoot, '.epicpoet', 'index.sqlite');
+        const db = initDatabase(dbPath);
+
+        const conditions: string[] = [];
+        const params: Record<string, string | number> = {};
+
+        if (options.from !== undefined) {
+          const fromVal = parseInt(options.from, 10);
+          if (isNaN(fromVal)) {
+            console.error(chalk.red('Error: --from must be a valid number'));
+            db.close();
+            process.exit(1);
+          }
+          conditions.push('epoch >= :fromVal');
+          params.fromVal = fromVal;
+        }
+
+        if (options.to !== undefined) {
+          const toVal = parseInt(options.to, 10);
+          if (isNaN(toVal)) {
+            console.error(chalk.red('Error: --to must be a valid number'));
+            db.close();
+            process.exit(1);
+          }
+          conditions.push('epoch <= :toVal');
+          params.toVal = toVal;
+        }
+
+        if (options.character) {
+          conditions.push(
+            'EXISTS (SELECT 1 FROM json_each(participants) je WHERE je.value = :charId)',
+          );
+          params.charId = options.character;
+        }
+
+        let sql =
+          'SELECT id, title, description, epoch, end_epoch, location, participants, visibility FROM events';
+        if (conditions.length > 0) {
+          sql += ' WHERE ' + conditions.join(' AND ');
+        }
+        sql += ' ORDER BY epoch ASC';
+
+        const rows = db.prepare(sql).all(params) as Array<{
+          id: string;
+          title: string;
+          description: string;
+          epoch: number;
+          end_epoch: number | null;
+          location: string | null;
+          participants: string;
+          visibility: string;
+        }>;
+
+        if (rows.length === 0) {
+          console.log(chalk.yellow('No events found matching the given criteria.'));
+          db.close();
+          return;
+        }
+
+        const table = new Table({
+          head: ['Title', 'Epoch', 'Location', 'Participants', 'Visibility'],
+          style: { head: ['cyan'] },
+        });
+
+        for (const row of rows) {
+          let participantsList = '';
+          try {
+            const parsed = JSON.parse(row.participants);
+            participantsList = Array.isArray(parsed) ? parsed.join(', ') : String(parsed);
+          } catch {
+            participantsList = row.participants ?? '';
+          }
+
+          table.push([
+            row.title,
+            String(row.epoch),
+            row.location ?? '',
+            participantsList,
+            row.visibility,
+          ]);
+        }
+
+        console.log(table.toString());
+        console.log(chalk.green(`\nFound ${rows.length} event(s).`));
+
+        db.close();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(`Error: ${message}`));
+        process.exit(1);
+      }
     });
 }
