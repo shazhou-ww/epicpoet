@@ -28,8 +28,15 @@ export function registerInitCommand(program: Command): void {
     .description('Initialize a new novel project')
     .option('--name <name>', 'Universe name')
     .option('--time-system <type>', 'Time system type (real or fictional)')
+    .option('--description <desc>', 'Universe description')
+    .option('--epoch-label <label>', 'Epoch zero label (for fictional time)')
+    .option('--pov <pov>', 'Default POV: first, third-limited, third-omniscient, narrator')
+    .option('--tone <tone>', 'Tone (e.g. epic fantasy)')
+    .option('--language <lang>', 'Language (e.g. en-US)')
     .action(async (options) => {
       try {
+        const nonInteractive = !!(options.name && options.timeSystem);
+
         const dirName = path.basename(process.cwd());
 
         const nameAnswer = options.name
@@ -41,12 +48,14 @@ export function registerInitCommand(program: Command): void {
               default: dirName,
             }]);
 
-        const descAnswer = await inquirer.prompt([{
-          type: 'input',
-          name: 'description',
-          message: 'Description:',
-          default: '',
-        }]);
+        const descAnswer = nonInteractive
+          ? { description: options.description ?? '' }
+          : await inquirer.prompt([{
+              type: 'input',
+              name: 'description',
+              message: 'Description:',
+              default: '',
+            }]);
 
         const timeTypeAnswer = options.timeSystem
           ? { type: options.timeSystem }
@@ -64,6 +73,8 @@ export function registerInitCommand(program: Command): void {
         if (timeTypeAnswer.type === 'real') {
           epochZeroLabel = 'Unix Epoch (1970-01-01)';
           epochZeroDate = '1970-01-01T00:00:00Z';
+        } else if (nonInteractive) {
+          epochZeroLabel = options.epochLabel ?? 'The Beginning';
         } else {
           const epochAnswer = await inquirer.prompt([{
             type: 'input',
@@ -107,27 +118,33 @@ export function registerInitCommand(program: Command): void {
           }
         }
 
-        const styleAnswer = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'default_pov',
-            message: 'Default POV:',
-            choices: ['first', 'third-limited', 'third-omniscient', 'narrator'],
-            default: 'third-limited',
-          },
-          {
-            type: 'input',
-            name: 'tone',
-            message: 'Tone (e.g. epic fantasy, noir, literary):',
-            default: 'epic fantasy',
-          },
-          {
-            type: 'input',
-            name: 'language',
-            message: 'Language (e.g. en-US, zh-CN):',
-            default: 'en-US',
-          },
-        ]);
+        const styleAnswer = nonInteractive
+          ? {
+              default_pov: options.pov ?? 'third-limited',
+              tone: options.tone ?? 'epic fantasy',
+              language: options.language ?? 'en-US',
+            }
+          : await inquirer.prompt([
+              {
+                type: 'list',
+                name: 'default_pov',
+                message: 'Default POV:',
+                choices: ['first', 'third-limited', 'third-omniscient', 'narrator'],
+                default: 'third-limited',
+              },
+              {
+                type: 'input',
+                name: 'tone',
+                message: 'Tone (e.g. epic fantasy, noir, literary):',
+                default: 'epic fantasy',
+              },
+              {
+                type: 'input',
+                name: 'language',
+                message: 'Language (e.g. en-US, zh-CN):',
+                default: 'en-US',
+              },
+            ]);
 
         for (const dir of DIRECTORIES) {
           const dirPath = path.join(process.cwd(), dir);
