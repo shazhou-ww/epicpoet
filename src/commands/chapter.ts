@@ -7,10 +7,7 @@ import matter from 'gray-matter';
 import Table from 'cli-table3';
 import { findProjectRoot } from '../db/sync';
 import { Chapter } from '../models/types';
-
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
+import { sanitizeFilename } from '../utils/filename';
 
 export function registerChapterCommand(program: Command): void {
   const chapter = program
@@ -34,8 +31,8 @@ export function registerChapterCommand(program: Command): void {
         const existingFiles = fs.readdirSync(chaptersDir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml'));
         const number = existingFiles.length + 1;
         const seqNum = String(number).padStart(2, '0');
-        const slug = slugify(options.name);
-        const chapterId = `ch-${seqNum}-${slug}`;
+        const safeName = sanitizeFilename(options.name);
+        const chapterId = `ch-${seqNum}-${safeName}`;
 
         const sceneIds = options.scenes.split(',').map(s => s.trim()).filter(s => s.length > 0);
 

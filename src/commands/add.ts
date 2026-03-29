@@ -3,25 +3,14 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import YAML from 'yaml';
-import { slugify as transliterateSlugify } from 'transliteration';
 import { Character, Concept, Event, Item, LearnRecord, Location } from '../models/types';
 import { findProjectRoot } from '../db/sync';
-
-function slugify(text: string): string {
-  const slug = transliterateSlugify(text, { lowercase: true, separator: '-' });
-  if (slug.length > 0) return slug;
-  return 'id-' + crypto.createHash('md5').update(text).digest('hex').substring(0, 8);
-}
+import { sanitizeFilename } from '../utils/filename';
 
 function resolveCharacterFile(charsDir: string, participant: string): string | null {
-  const directFile = path.join(charsDir, `${participant}.yaml`);
+  const directFile = path.join(charsDir, `${sanitizeFilename(participant)}.yaml`);
   if (fs.existsSync(directFile)) return directFile;
-
-  const slugged = slugify(participant);
-  const slugFile = path.join(charsDir, `${slugged}.yaml`);
-  if (fs.existsSync(slugFile)) return slugFile;
 
   if (!fs.existsSync(charsDir)) return null;
   const yamlFiles = fs.readdirSync(charsDir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml'));
@@ -68,10 +57,10 @@ async function addCharacter(options: CharacterOptions): Promise<void> {
     ]);
   }
 
-  const slug = slugify(answers.name);
+  const safeName = sanitizeFilename(answers.name);
 
   const character: Character = {
-    id: slug,
+    id: answers.name,
     name: answers.name,
     aliases: [],
     description: answers.description,
@@ -89,10 +78,10 @@ async function addCharacter(options: CharacterOptions): Promise<void> {
     fs.mkdirSync(charsDir, { recursive: true });
   }
 
-  const filePath = path.join(charsDir, `${slug}.yaml`);
+  const filePath = path.join(charsDir, `${safeName}.yaml`);
   fs.writeFileSync(filePath, YAML.stringify(character), 'utf-8');
 
-  console.log(chalk.green(`\n✓ Character "${answers.name}" created at characters/${slug}.yaml`));
+  console.log(chalk.green(`\n✓ Character "${answers.name}" created at characters/${safeName}.yaml`));
 }
 
 interface EventOptions {
@@ -138,8 +127,8 @@ async function addEvent(options: EventOptions): Promise<void> {
     ? fs.readdirSync(eventsDir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
     : [];
   const seqNum = String(existingFiles.length + 1).padStart(3, '0');
-  const slug = slugify(answers.title);
-  const eventId = `evt-${seqNum}-${slug}`;
+  const safeTitle = sanitizeFilename(answers.title);
+  const eventId = `evt-${seqNum}-${safeTitle}`;
 
   const participants = answers.participants
     ? answers.participants.split(',').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
@@ -213,21 +202,21 @@ async function addLocation(options: LocationOptions): Promise<void> {
     ]);
   }
 
-  const slug = slugify(answers.name);
+  const safeName = sanitizeFilename(answers.name);
 
   let targetDir: string;
   let filePath: string;
 
   if (answers.parent) {
     targetDir = path.join(locsDir, answers.parent);
-    filePath = path.join(targetDir, `${slug}.yaml`);
+    filePath = path.join(targetDir, `${safeName}.yaml`);
   } else {
     targetDir = locsDir;
-    filePath = path.join(locsDir, `${slug}.yaml`);
+    filePath = path.join(locsDir, `${safeName}.yaml`);
   }
 
   const location: Location = {
-    id: slug,
+    id: answers.name,
     name: answers.name,
     description: answers.description,
     ...(answers.parent ? { parent: answers.parent } : {}),
@@ -242,8 +231,8 @@ async function addLocation(options: LocationOptions): Promise<void> {
   fs.writeFileSync(filePath, YAML.stringify(location), 'utf-8');
 
   const relativePath = answers.parent
-    ? `locations/${answers.parent}/${slug}.yaml`
-    : `locations/${slug}.yaml`;
+    ? `locations/${answers.parent}/${safeName}.yaml`
+    : `locations/${safeName}.yaml`;
   console.log(chalk.green(`\n✓ Location "${answers.name}" created at ${relativePath}`));
 }
 
@@ -273,10 +262,10 @@ async function addConcept(options: ConceptOptions): Promise<void> {
     ]);
   }
 
-  const slug = slugify(answers.name);
+  const safeName = sanitizeFilename(answers.name);
 
   const concept: Concept = {
-    id: slug,
+    id: answers.name,
     name: answers.name,
     category: answers.category,
     description: answers.description,
@@ -288,10 +277,10 @@ async function addConcept(options: ConceptOptions): Promise<void> {
     fs.mkdirSync(conceptsDir, { recursive: true });
   }
 
-  const filePath = path.join(conceptsDir, `${slug}.yaml`);
+  const filePath = path.join(conceptsDir, `${safeName}.yaml`);
   fs.writeFileSync(filePath, YAML.stringify(concept), 'utf-8');
 
-  console.log(chalk.green(`\n✓ Concept "${answers.name}" created at concepts/${slug}.yaml`));
+  console.log(chalk.green(`\n✓ Concept "${answers.name}" created at concepts/${safeName}.yaml`));
 }
 
 interface ItemOptions {
@@ -320,10 +309,10 @@ async function addItem(options: ItemOptions): Promise<void> {
     ]);
   }
 
-  const slug = slugify(answers.name);
+  const safeName = sanitizeFilename(answers.name);
 
   const item: Item = {
-    id: slug,
+    id: answers.name,
     name: answers.name,
     description: answers.description,
     ...(answers.owner ? { owner: answers.owner } : {}),
@@ -335,10 +324,10 @@ async function addItem(options: ItemOptions): Promise<void> {
     fs.mkdirSync(itemsDir, { recursive: true });
   }
 
-  const filePath = path.join(itemsDir, `${slug}.yaml`);
+  const filePath = path.join(itemsDir, `${safeName}.yaml`);
   fs.writeFileSync(filePath, YAML.stringify(item), 'utf-8');
 
-  console.log(chalk.green(`\n✓ Item "${answers.name}" created at items/${slug}.yaml`));
+  console.log(chalk.green(`\n✓ Item "${answers.name}" created at items/${safeName}.yaml`));
 }
 
 export function registerAddCommand(program: Command): void {

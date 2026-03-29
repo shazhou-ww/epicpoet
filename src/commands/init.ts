@@ -18,10 +18,6 @@ const DIRECTORIES = [
   '.epicpoet',
 ];
 
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
 export function registerInitCommand(program: Command): void {
   program
     .command('init')

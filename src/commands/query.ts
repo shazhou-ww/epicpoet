@@ -36,7 +36,7 @@ export function registerQueryCommand(program: Command): void {
           process.exit(1);
         }
 
-        const charRow = db.prepare('SELECT id, name FROM characters WHERE id = ?').get(character) as { id: string; name: string } | undefined;
+        const charRow = db.prepare('SELECT id, name FROM characters WHERE id = ? OR name = ?').get(character, character) as { id: string; name: string } | undefined;
         if (!charRow) {
           console.error(chalk.red(`Error: character "${character}" not found. Run 'epicpoet sync' first.`));
           db.close();
@@ -66,7 +66,7 @@ export function registerQueryCommand(program: Command): void {
 
         const rows = db.prepare(sql).all({
           T,
-          character_id: character,
+          character_id: charRow.id,
         }) as KnowledgeRow[];
 
         const deduped = new Map<string, KnowledgeRow>();

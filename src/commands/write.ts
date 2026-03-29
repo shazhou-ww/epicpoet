@@ -7,10 +7,7 @@ import matter from 'gray-matter';
 import { initDatabase } from '../db/schema';
 import { findProjectRoot } from '../db/sync';
 import { SceneFrontmatter } from '../models/types';
-
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
+import { sanitizeFilename } from '../utils/filename';
 
 interface WriteOptions {
   time?: string;
@@ -96,7 +93,7 @@ export function registerWriteCommand(program: Command): void {
         // (c) Get POV character info
         let povCharacter: CharacterRow | null = null;
         if (options.pov !== 'narrator') {
-          const row = db.prepare('SELECT id, name, description, traits FROM characters WHERE id = ?').get(options.pov) as CharacterRow | undefined;
+          const row = db.prepare('SELECT id, name, description, traits FROM characters WHERE id = ? OR name = ?').get(options.pov, options.pov) as CharacterRow | undefined;
           if (!row) {
             console.error(chalk.red(`Error: POV character "${options.pov}" not found. Run 'epicpoet sync' first.`));
             db.close();
@@ -111,7 +108,7 @@ export function registerWriteCommand(program: Command): void {
           : [];
         const participantCharacters: CharacterRow[] = [];
         for (const pid of participantIds) {
-          const row = db.prepare('SELECT id, name, description, traits FROM characters WHERE id = ?').get(pid) as CharacterRow | undefined;
+          const row = db.prepare('SELECT id, name, description, traits FROM characters WHERE id = ? OR name = ?').get(pid, pid) as CharacterRow | undefined;
           if (row) {
             participantCharacters.push(row);
           } else {
@@ -122,7 +119,7 @@ export function registerWriteCommand(program: Command): void {
         // (e) Get location info
         let locationInfo: LocationRow | null = null;
         if (options.location) {
-          const row = db.prepare('SELECT id, name, description FROM locations WHERE id = ?').get(options.location) as LocationRow | undefined;
+          const row = db.prepare('SELECT id, name, description FROM locations WHERE id = ? OR name = ?').get(options.location, options.location) as LocationRow | undefined;
           if (row) {
             locationInfo = row;
           } else {
@@ -303,7 +300,7 @@ export function registerWriteCommand(program: Command): void {
 
         const existingMdFiles = fs.readdirSync(scenesDir).filter(f => f.endsWith('.md'));
         const seqNum = String(existingMdFiles.length + 1).padStart(3, '0');
-        const sceneId = 'scn-' + seqNum + '-' + slugify(options.synopsis || 'untitled');
+        const sceneId = 'scn-' + seqNum + '-' + sanitizeFilename(options.synopsis || 'untitled');
 
         const sceneFilePath = options.output
           ? options.output
