@@ -9,6 +9,8 @@ import { registerChapterCommand } from './commands/chapter';
 import { registerSyncCommand } from './commands/sync';
 import { registerStatusCommand } from './commands/status';
 import { registerShowCommand } from './commands/show';
+import { registerEditCommand } from './commands/edit';
+import { registerDeleteCommand } from './commands/delete';
 
 const program = new Command();
 
@@ -25,5 +27,7 @@ registerChapterCommand(program);
 registerSyncCommand(program);
 registerStatusCommand(program);
 registerShowCommand(program);
+registerEditCommand(program);
+registerDeleteCommand(program);
 
 program.parse();
