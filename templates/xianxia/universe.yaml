@@ -1,0 +1,21 @@
+name: 灵渊大陆
+description: >-
+  灵渊大陆，天地灵气充沛之世界。万物皆可修炼，强者移山填海，弱者苟延残喘。
+  宗门林立，散修如草，妖兽横行于荒野，秘境隐于云端。
+  灵历纪元以来，修仙界经历数次大劫，如今正值灵气复苏之期，
+  各方势力蠢蠢欲动，天才辈出，风云际会。
+time_system:
+  type: fictional
+  epoch_zero_label: 灵历元年
+  units:
+    - name: 年
+      seconds: 31536000
+    - name: 月
+      seconds: 2592000
+    - name: 日
+      seconds: 86400
+style:
+  default_pov: third-limited
+  tone: 仙侠古风
+  language: zh-CN
+created_at: "2026-03-29T00:00:00.000Z"
