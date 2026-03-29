@@ -8,6 +8,7 @@ import { registerWriteCommand } from './commands/write';
 import { registerChapterCommand } from './commands/chapter';
 import { registerSyncCommand } from './commands/sync';
 import { registerStatusCommand } from './commands/status';
+import { registerShowCommand } from './commands/show';
 
 const program = new Command();
 
@@ -23,5 +24,6 @@ registerWriteCommand(program);
 registerChapterCommand(program);
 registerSyncCommand(program);
 registerStatusCommand(program);
+registerShowCommand(program);
 
 program.parse();
